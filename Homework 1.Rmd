@@ -1,0 +1,196 @@
+---
+title: "Homework 1"
+author: "Davis Townsend"
+date: "August 2, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## #1
+
+$$
+\frac{numerator}{denominator}
+$$
+
+# financial portfolio example
+##Balanced Portfolio
+```{r message=FALSE, warning=FALSE}
+library(mosaic)
+library(fImport)
+library(foreach)
+```
+
+```{r warning=FALSE}
+mystocks = c("SPY", "TLT", "LQD", "EEM", "VNQ")
+myprices = yahooSeries(mystocks, from='1980-01-01', to='2016-08-02')
+head(myprices)
+```
+```{r}
+#Helper function
+YahooPricesToReturns = function(series) {
+  mycols = grep('Adj.Close', colnames(series))
+  closingprice = series[,mycols]
+  N = nrow(closingprice)
+  percentreturn = as.data.frame(closingprice[2:N,]) / as.data.frame(closingprice[1:(N-1),]) - 1
+  mynames = strsplit(colnames(percentreturn), '.', fixed=TRUE)
+  mynames = lapply(mynames, function(x) return(paste0(x[1], ".PctReturn")))
+  colnames(percentreturn) = mynames
+  as.matrix(na.omit(percentreturn))
+}
+myreturns = YahooPricesToReturns(myprices)
+```
+
+```{r}
+pairs(myreturns)
+
+```
+Simulation of 1 random day
+```{r}
+return.today = resample(myreturns, 1, orig.ids=FALSE)
+n_days = 20
+```
+If we look at the following plots we see that US treasury bonds are the least volatile, or safest ETF's, while Emerging-Market Equities are the most volatile, or most risky ETF.
+```{r}
+plot(myreturns[,1], type='l', xlab="SPY Index", ylab="Returns", main="Volatility for S&P 500 stock index")
+plot(myreturns[,2], type='l', xlab="TLT Index", ylab="Returns", main="Volatility for US Treasury Bonds")
+plot(myreturns[,3], type='l', xlab="LQD Index", ylab="Returns", main="Volatility for Investment-Grade Corporate Bonds")
+plot(myreturns[,4], type='l', xlab="EEM Index", ylab="Returns", main="Volatility for Emerging-Market Equities")
+plot(myreturns[,5], type='l', xlab="VNQ Index", ylab="Returns", main="Volatility for Real Estate")
+```
+
+```{r}
+# Now simulate many different possible trading years!
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+  holdings = weights * totalwealth
+  wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+  for(today in 1:n_days) {
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+head(sim1)
+```
+
+```{r}
+#look at profit and loss potential
+hist(sim1[,n_days], 25)
+
+# Profit/loss
+hist(sim1[,n_days]- 100000)
+```
+
+What is the 5% value at risk
+```{r}
+quantile(sim1[,n_days], 0.05) - 100000
+```
+
+
+##Safe Portfolio: lots of US treasury bonds
+```{r}
+# Now simulate many different possible trading years!
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  weights = c(0.05, 0.8, 0.1, 0.05, 0.1)
+  holdings = weights * totalwealth
+  wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+  for(today in 1:n_days) {
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+head(sim1)
+```
+
+```{r}
+#look at profit and loss potential
+hist(sim1[,n_days], 25)
+
+# Profit/loss
+hist(sim1[,n_days]- 100000)
+```
+
+What is the 5% value at risk
+```{r}
+quantile(sim1[,n_days], 0.05) - 100000
+```
+
+##Risky Portfolio: heavily weighted into emerging markets
+```{r}
+# Now simulate many different possible trading years!
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  weights = c(0.1, 0.05, 0.1, 0.8, 0.05)
+  holdings = weights * totalwealth
+  wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+  for(today in 1:n_days) {
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+head(sim1)
+```
+
+```{r}
+#look at profit and loss potential
+hist(sim1[,n_days], 25)
+
+# Profit/loss
+hist(sim1[,n_days]- 100000)
+```
+
+What is the 5% value at risk
+```{r}
+quantile(sim1[,n_days], 0.05) - 100000
+```
+
+## heavily weighted into real estate, this might be heavily influenced by 2009 recession
+```{r}
+# Now simulate many different possible trading years!
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  weights = c(0.05, 0.05, 0.1, 0.1, 0.8)
+  holdings = weights * totalwealth
+  wealthtracker = rep(0, n_days) # Set up a placeholder to track total wealth
+  for(today in 1:n_days) {
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+head(sim1)
+```
+
+```{r}
+#look at profit and loss potential
+hist(sim1[,n_days], 25)
+
+# Profit/loss
+hist(sim1[,n_days]- 100000)
+```
+
+What is the 5% value at risk
+```{r}
+quantile(sim1[,n_days], 0.05) - 100000
+```
+
+plot(wealthtracker, type='l')
