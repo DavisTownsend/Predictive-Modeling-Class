@@ -1,0 +1,384 @@
+---
+title: 'STA 380, Part 2: Exercises 1'
+author: "Brooks Beckelman, Zack Bilderback, Davis Townsend"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+```
+
+# Probability Practice
+
+---
+
+## Part A.
+
+This problem can be solved using the Law of Total Probability, which states that the probability that an event will happen is the sum of the probabilities of all of the different ways that the event can happen. In this context, this means that the probability of a "yes" answer to the survey is equal to the probability of a "yes" answer from a random clicker plus the probability of a "yes" answer from a random clicker. This can be modeled by the following equation:
+
+$$
+P(Yes) = P(Yes | Random Clicker) * P(Random Clicker) + P(Yes|Truthful Clicker) * P(Truthful Clicker)
+$$
+
+This equation can be rearranged to solve for the probability of a "yes" answer given that the user is a truthful clicker:
+
+$$
+P(Yes|Truthful Clicker) = \frac{P(Yes) - P(Yes|Random Clicker)*P(Random Clicker)}{P(True)}
+$$
+
+This equation is solved using the code below.
+
+```{r echo=TRUE}
+prob_yes = 0.65
+prob_randClicker = 0.30
+prob_trueClicker = 1 - prob_randClicker
+prob_yes_givenRand = 0.50
+
+prob_yes_givenTrue = (prob_yes - (prob_yes_givenRand*prob_randClicker)) / prob_trueClicker
+prob_yes_givenTrue
+```
+
+The estimated fraction of truthful clickers who answered "yes" is about 0.714, or 71.4%.
+
+<br>
+
+## Part B.
+
+This problem can be solved using both the Law of Total Probability and Bayes' Rule. The Law of Total Probability is described in Part A. Bayes' Rule is a method that can be used to flip the conditional probability of two events. In this case, we must obtain the probability of having the disease given a positive test from the probability of receiving a positive test given that you have the disease. The Bayes' Rule is modeled in the following equation: 
+$$
+P(Disease|Positive) = \frac{P(Disease) * P(Positive|Disease)}{P(Positive)}
+$$
+
+Everything in the above equation is given except for the overall probability of a positive test: P(Positive). This can be obtained using the Law of Total Probability:
+
+$$
+P(Positive) = P(Positive|Disease) * P(Disease) + P(Positive|No Disease) * P(No Disease)
+$$
+
+The code below solves for the probability that someone has the disease given that they tested positive.
+
+```{r echo=TRUE}
+prob_disease = 0.000025
+prob_noDisease = 1 - prob_disease
+prob_pos_givenDisease = 0.993
+prob_pos_givenNoDisease = 1 - 0.9999
+
+prob_pos = prob_pos_givenDisease*prob_disease + prob_pos_givenNoDisease*prob_noDisease
+
+prob_disease_givenPos = (prob_disease*prob_pos_givenDisease) / prob_pos
+prob_disease_givenPos
+```
+
+Given that a person tests positve, there is only about a 20% chance that they actually have the disease. Therefore, this test should probably not be implemented in a universal testing policy for the disease since you are far more likely to receive a false positive than a true one.
+
+<br> <br>
+
+# Exploratory Analysis: Green Buildings
+
+---
+
+```{r}
+rm(list=ls())
+setwd("C:\\Users\\Owner\\Documents\\R\\Example Data")
+buildings = read.csv('greenbuildings.csv', header=TRUE)
+```
+
+
+Let's begin by checking the accuracy of the findings of the on-staff stats guru.
+
+```{r echo=TRUE}
+# Filter out buildings that have less than 10% of available space occupied
+buildings_lr10 = buildings[buildings$leasing_rate>10,] 
+attach(buildings)
+
+# Separate data set into green buildings and non-green buildings
+green_buildings_lr10 = buildings_lr10[buildings_lr10$green_rating==1,]
+nongreen_buildings_lr10 = buildings_lr10[buildings_lr10$green_rating==0,]
+
+# Find medians for each
+median_green = median(green_buildings_lr10$Rent)
+median_nongreen = median(nongreen_buildings_lr10$Rent)
+median_green
+median_nongreen
+```
+
+It appears that the median market rents that were found by the guru are correct if you remove buildings that have less than 10% of the available space occupied. We concluded that it is reasonable to remove the buildings that have less than 10% leasing rate because those are likely not extremely relevant to the problem at hand, and, as the guru indicated, could potentially distort the analysis.
+
+In fact, we think that it may be beneficial to eliminate a greater number of properties from our analysis based on leasing rate. Let's look at the leasing rate distributions for green and non-green buildings.
+
+```{r}
+green_buildings=buildings[buildings$green_rating==1,]
+nongreen_buildings = buildings[buildings$green_rating==0,]
+
+par(mfrow=c(1,2))
+hist(green_buildings$leasing_rate, breaks=10, xlab='Green Buildings Leasing Rate', main='Green')
+hist(nongreen_buildings$leasing_rate, breaks=10, xlab='Nongreen Buildings Leasing Rate', main='Non-Green')
+```
+
+It appears that the leasing rates for both green and non-green buildings are largely skewed toward higher leasing rates. The majority of buildings in both cases have leasing rates greater than 80%. Therefore, going forward we will only examine those buildings to eliminate any properties that may have unique circumstances that are leading to low leasing rates.
+
+```{r}
+buildings = buildings[buildings$leasing_rate>=80,]
+green_buildings = green_buildings[green_buildings$leasing_rate>=80,]
+nongreen_buildings = nongreen_buildings[nongreen_buildings$leasing_rate>=80,]
+```
+
+Even though the guru reported accurate results, this does not mean his/her analysis is not flawed. For one, he/she takes the median rent of all green buildings and the median rent of all non-green buildings without considering any other factors that may contribute to the rent of a building. One way to mitigate this is to compare rents for green buildings and non-green buildings within each cluster. Each cluster contains one green building and all non-green buildings within a quarter-mile radius of the green building. Therefore, comparing rents within a cluster should account for factors associated with location that may influence rent. If we perform a linear regression comparing the rent of a green building to the average rent in that building's cluster, we should get a better idea of the premium for rent in green buildings.
+
+```{r}
+par(mfrow=c(1,1))
+lm_green = lm(Rent~cluster_rent, data=green_buildings)
+plot(green_buildings$cluster_rent, green_buildings$Rent, xlab='Average Cluster Rent', ylab='Rent for Green Building')
+abline(lm_green, col='red', lwd=3)
+```
+
+It appears that there are a couple of outliers that we should get rid of to obtain a more accurate relationship.
+
+```{r}
+green_buildings_noOut = green_buildings[green_buildings$Rent<97,]
+lm_green_noOut = lm(Rent~cluster_rent, data=green_buildings_noOut)
+plot(green_buildings_noOut$cluster_rent, green_buildings_noOut$Rent, xlab='Average Cluster Rent', ylab='Rent for Green Building')
+abline(lm_green_noOut, col='red', lwd=3)
+
+summary(lm_green_noOut)
+```
+
+The coefficient relating average rent in a cluster to rent of the green building in that cluster is about 1.07716. This means that the linear model estimates that rent for a green building is, on average, 1.07716 times more than for a non-green building in the same area. 
+
+However, there are still other factors to consider. Each building in the data set is given a class A, B, or C rating. Class A rated buildings are considered to be the highest-quality properties in an area, followed by class B, and class C properties are the least desirable. In order to get an accurate idea of the premium for green buildings, we should compare those buildings only to other buildings within the same class. Below, we compare green buildings to nongreen buildings within the same cluster and the same class using linear regressions.
+
+```{r}
+buildings_classA = buildings[buildings$class_a==1,]
+num_of_clusters = range(buildings_classA$cluster)[2] - range(buildings_classA$cluster)[1]
+green_rents_A = rep(0,num_of_clusters)
+nongreen_rents_A = rep(0,num_of_clusters)
+for (i in 1:num_of_clusters){
+  buildings_temp = buildings_classA[buildings_classA$cluster==i,]
+  if (sum(buildings_temp$green_rating) > 0){
+    greenA_temp = buildings_temp[buildings_temp$green_rating == 1,]
+    nongreenA_temp = buildings_temp[buildings_temp$green_rating==0,]
+    green_rents_A[i] = mean(greenA_temp$Rent)
+    nongreen_rents_A[i] = mean(nongreenA_temp$Rent)
+  } else {
+    green_rents_A[i] = 0
+    nongreen_rents_A[i] = 0
+  }
+}
+
+green_rents_A = green_rents_A[green_rents_A != 0]
+nongreen_rents_A = nongreen_rents_A[nongreen_rents_A != 0]
+
+lm_classA = lm(green_rents_A~nongreen_rents_A)
+plot(nongreen_rents_A, green_rents_A)
+abline(lm_classA, col='red', lwd=3)
+summary(lm_classA)
+```
+
+For class A properties, it appears that there is no premium for green buildings. In fact, with a coefficient of about 0.83, it seems that rents are typically higher in non-green buildings.
+
+```{r}
+buildings_classB = buildings[buildings$class_b==1,]
+num_of_clusters = range(buildings_classB$cluster)[2] - range(buildings_classB$cluster)[1]
+green_rents_B = rep(0,num_of_clusters)
+nongreen_rents_B = rep(0,num_of_clusters)
+for (i in 1:num_of_clusters){
+  buildings_temp = buildings_classB[buildings_classB$cluster==i,]
+  if (sum(buildings_temp$green_rating) > 0){
+    greenB_temp = buildings_temp[buildings_temp$green_rating == 1,]
+    nongreenB_temp = buildings_temp[buildings_temp$green_rating==0,]
+    green_rents_B[i] = mean(greenB_temp$Rent)
+    nongreen_rents_B[i] = mean(nongreenB_temp$Rent)
+  } else {
+    green_rents_B[i] = 0
+    nongreen_rents_B[i] = 0
+  }
+}
+
+green_rents_B= green_rents_B[green_rents_B != 0]
+nongreen_rents_B = nongreen_rents_B[nongreen_rents_B != 0]
+rents_B = data.frame(green_rents_B, nongreen_rents_B)
+rents_B = rents_B[rents_B$green_rents_B < 80,]
+
+lm_classB = lm(green_rents_B~nongreen_rents_B, data=rents_B)
+plot(rents_B$nongreen_rents_B, rents_B$green_rents_B)
+abline(lm_classB, col='red', lwd=3)
+summary(lm_classB)
+```
+
+For class B properties, the model produces a coefficient of about 1 for the relationship between green and non-green properties. This indicates that there is no premium for green buildings among class B properties either. 
+
+Also, looking at the plots, it is apparent that there are far more green properties with a class A rating than a class B rating. This could potentially explain the premium that we thought we saw from our previous regression. By only comparing green properties to other buildings in their cluster regardless of class, we were likely comparing class A green buildings to cluster rent means that were watered down by class B buildings.
+
+Given these new findings, we are forced to disagree with the stats guru and conclude that it is likely not a good financial move to build the green building.
+
+<br> <br>
+
+# Bootstrapping
+
+```{r message=FALSE, warning=FALSE}
+library(mosaic)
+library(fImport)
+library(foreach)
+```
+
+In order to construct our portfolios, the first step is to obtain the performance data for the exchange-traded funds that we are considering. We chose to pull daily data from September 2004 to the present because that is the first year that yahoo has data for VNQ, one of the funds that we are considering, and because we felt this time frame would give us both good and bad runs of stock-market performance. The most recent data is shown below. 
+
+```{r warning=FALSE}
+mystocks = c("SPY", "TLT", "LQD", "EEM", "VNQ")
+myprices = yahooSeries(mystocks, from='2004-09-01', to='2016-08-02') # No VNQ before 9-1-2004 
+tail(myprices)
+```
+
+The dataframe provides several daily values for each stock: opening price, high price, low price, closing price, volume, and adjusted closing price. We can use this data to create a new dataframe with the percent return on each stock for each day in our time range.
+
+```{r}
+#Helper function
+YahooPricesToReturns = function(series) {
+  mycols = grep('Adj.Close', colnames(series))
+  closingprice = series[,mycols]
+  N = nrow(closingprice)
+  percentreturn = as.data.frame(closingprice[2:N,]) / as.data.frame(closingprice[1:(N-1),]) - 1
+  mynames = strsplit(colnames(percentreturn), '.', fixed=TRUE)
+  mynames = lapply(mynames, function(x) return(paste0(x[1], ".PctReturn")))
+  colnames(percentreturn) = mynames
+  as.matrix(na.omit(percentreturn))
+}
+myreturns = YahooPricesToReturns(myprices)
+tail(myreturns)
+```
+
+Let's look at a pairwise scatter plot of the returns for each stock to see how they may be related to one another.
+
+```{r}
+pairs(myreturns)
+```
+
+It looks like the strongest positive correlations are between US domestic equities (SPY), emerging-market equities (EEM), and real estate (VNQ). This could be interepreted to mean that these three funds are more volatile, changing more as a result of overall market fluctuations. US treasury bonds (TLT) and investment-grade corporate bonds (LQD) do not seem to have as strong of correlations with the other funds, indicating that perhaps these funds are safer, withstanding fluctuations in the overall market. Let's take a closer look by plotting the daily returns for each stock over time.
+
+```{r}
+par(mfrow=c(2,3))
+plot(myreturns[,1], type='l', xlab="SPY Index", ylab="Returns", ylim=c(-.15,.15), main="S&P 500 stock index")
+plot(myreturns[,2], type='l', xlab="TLT Index", ylab="Returns", ylim=c(-.15,0.15),main="US Treasury Bonds")
+plot(myreturns[,3], type='l', xlab="LQD Index", ylab="Returns",ylim=c(-.15,.15), main="Investment-Grade Corporate Bonds")
+plot(myreturns[,4], type='l', xlab="EEM Index", ylab="Returns", ylim=c(-.15,.15), main="Emerging-Market Equities")
+plot(myreturns[,5], type='l', xlab="VNQ Index", ylab="Returns", ylim=c(-.15,.15), main="Real Estate")
+```
+
+From the above plots, we can get a sense for the volatility of each fund from the range of returns that we see. As expected, US treasury bonds and investment-grade corporate bonds appear to be the least volatile, while the remaining three funds have consistently higher fluctuations in stock price. Emerging-market equities and real estate look to clearly be the most volatile, slightly more so than the the S&P 500. This leads us to the conclusion that US treasury bonds and investment-grade corporate bonds are safer investments with less risk but also less potential for high returns. Emerging-market equities and real estate are riskier funds with more risk and more potential for high returns. The S&P 500 lies somewhere in the middle.
+
+Now let's create 3 different portfolios to compare: one "safe" portfolio, one "aggressive" portfolio, and one porfolio with our assets evenly distributed between the 5 funds. For the "safe" portfolio, we will allocate 45% of our assets to US treasury bonds, 45% to investment-grade corporate bonds, and 10% to the S&P 500. For our "aggressive" portfolio, we will distribute 50% to emerging market equities and 50% to real estate. Each portfolio will contain $100,000 total.
+
+```{r}
+weights_even = c(0.2,0.2,0.2,0.2,0.2)
+weights_safe = c(0.1,0.45,0.45,0,0)
+weights_aggressive = c(0,0,0,0.5,0.5)
+```
+
+For each portfolio, we will project returns over a 4-week (20-day) period 5,000 times. Each time, we will calculate the value of the portfolio's holdings after the 4-week period and the profit or loss. The histograms below represent the distributions of each calculation over the 5,000 simulations.   
+
+```{r}
+n_days = 20
+set.seed(1)
+sim_safe = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  wealthtracker = rep(0, n_days) 
+  for(today in 1:n_days) {
+    holdings = weights_safe * totalwealth
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+par(mfrow=c(1,2))
+hist(sim_safe[,n_days], 25, main='Safe Portfolio Total Wealth', xlab='Total Wealth after 20 Days')
+hist(sim_safe[,n_days]-100000, main='Safe Portfolio Profit/Loss', xlab='Profit/Loss after 20 Days')
+```
+
+```{r}
+set.seed(12)
+sim_even = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  wealthtracker = rep(0, n_days) 
+  for(today in 1:n_days) {
+    holdings = weights_even * totalwealth
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+par(mfrow=c(1,2))
+hist(sim_even[,n_days], 25, main='Even Split Portfolio Total Wealth', xlab='Total Wealth after 20 Days')
+hist(sim_even[,n_days]-100000, main='Even Split Porfolio Profit/Loss', xlab='Profit/Loss after 20 Days')
+```
+
+```{r}
+set.seed(123)
+sim_aggressive = foreach(i=1:5000, .combine='rbind') %do% {
+  totalwealth = 100000
+  wealthtracker = rep(0, n_days) 
+  for(today in 1:n_days) {
+    holdings = weights_aggressive * totalwealth
+    return.today = resample(myreturns, 1, orig.ids=FALSE)
+    holdings = holdings + holdings*return.today
+    totalwealth = sum(holdings)
+    wealthtracker[today] = totalwealth
+  }
+  wealthtracker
+}
+
+par(mfrow=c(1,2))
+hist(sim_aggressive[,n_days], 25, main='Aggressive Portfolio Total Wealth', xlab='Total Wealth after 20 Days')
+hist(sim_aggressive[,n_days]-100000, main='Aggressive Portfolio Profit/Loss', xlab='Profit/Loss after 20 Days')
+```
+
+For each portfolio, the majority of simulations resulted in a profit around 0 with slightly more yielding positive results than negative. However, as one would expect, the range of outcomes varies greatly. The range for the safe portfolio is only about $10,000, varying from a $5,000 loss to a $5,000 profit. For the evenly split portfolio, the range approximately doubles with a maximum profit and loss of about $10,000. The range approximately doubles again for the aggressive portfolio, which ranges from a $20,000 loss to a $20,000 gain. The best choice of the three portfolios depends on the preferences of the investor. 
+
+<br> <br>
+
+# Market Segmentation
+
+---
+In preparing the data, We only took out the ID column in case we could find interesting results about how many bots were tweeting.
+```{r}
+rm(list=ls())
+library(ggplot2)
+library(wordcloud)
+library(flexclust)
+library(foreach)
+setwd("C:\\Users\\Owner\\Documents\\R\\Example Data")
+social = read.csv('social_marketing.csv', header=TRUE)
+z = social[,-1] 
+```
+
+
+There's a large portion of users that fall under chatter, which seems to suggest that a lot of users are'nt talking about any coherent thing that they can market towards. Aside from that, a lot of their users seem to be interested in health, nutrition, personal fitness, cooking, and sharing photos. 
+
+
+```{r}
+#Running PCA
+pc1 = prcomp(z, scale.=TRUE)
+wordcloud(colnames(z), pc1$center, min.freq=0, max.words=100, random.order=FALSE)
+```
+
+
+We create a new category called healthy_lifestyle that aggregates the correlated interests of health, nutrition, and personal 
+fitness.
+
+
+```{r}
+setwd("C:\\Users\\Owner\\Documents\\R\\Example Data")
+social = read.csv('social_marketing.csv', header=TRUE)
+social['healthy_lifestyle'] = rowSums(social[, c(16, 33)])
+z = social[, -c(1, 17, 33)]
+pc1 = prcomp(z, scale.=TRUE)
+wordcloud(colnames(z), pc1$center, min.freq=0, max.words=100, random.order=FALSE)
+```
+
+
+You could consider people interested in health, nutrition, and personal fitness to be a market segment under the umbrella of wanting to live a healthy lifestyle. When we rerun the model with this new market segment, we clearly see that most of NutrientH20's users are interested in a healthy lifestyle, and this should be the company's main demographic for marketing efforts.
